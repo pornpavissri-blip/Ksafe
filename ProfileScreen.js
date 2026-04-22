@@ -1,14 +1,20 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, TextInput, Modal, FlatList, Platform, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, TextInput, Modal, FlatList, Platform, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import MapView, { Marker } from 'react-native-maps';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { getAuth, signOut } from 'firebase/auth';
 
-export default function ProfileScreen({ onGoHome, onGoSOS, onGoSearch, onGoProfile, onLogout }) {
+// --- นำเข้า Firebase Auth และ Firestore ---
+import { signOut, onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore'; 
+import { db, auth } from './firebaseConfig'; 
+
+export default function ProfileScreen({ onGoHome, onGoSOS, onGoSearch, onGoProfile, onLogout, onUpdateContact }) {
   const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
   const [showPickerModal, setShowPickerModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -17,40 +23,55 @@ export default function ProfileScreen({ onGoHome, onGoSOS, onGoSearch, onGoProfi
 
   const [pickerData, setPickerData] = useState([]);
   const [currentPickerField, setCurrentPickerField] = useState('');
+  const [dateValue, setDateValue] = useState(new Date());
 
   const [profile, setProfile] = useState({
-    firstName: 'เจ้มิว',
-    lastName: 'พ่อทุกสถาบัน',
-    phone: '099-999-9999',
-    weight: '60',
-    height: '200',
-    birthDate: '31/11/2549',
-    gender: 'ชาย',
-    bloodType: 'A',
+    firstName: '',
+    lastName: '',
+    phone: '',
+    weight: '',
+    height: '',
+    birthDate: '01/01/2540',
+    gender: 'ไม่ระบุ',
+    bloodType: 'ไม่ทราบ',
     organDonor: 'ฉันไม่ใช่ผู้บริจาคอวัยวะ',
     aboutMe: 'ไม่มี',
-    address: 'มหาวิทยาลัยเทคโนโลยีสุรนารี นครราชสีมา',
+    address: '',
     coordinate: { latitude: 14.8782, longitude: 102.0194 },
     emergencyContact: { name: 'สถานีตำรวจ', phone: '191' },
     profileImage: 'https://cdn-icons-png.flaticon.com/512/149/149071.png'
   });
 
-  // --- ฟังก์ชัน Logout ---
-  const handleLogout = () => {
-    const auth = getAuth();
-    signOut(auth)
-      .then(() => {
-        if (onLogout) {
-          onLogout();
+  // --- 1. ดึงข้อมูลจาก Firestore เมื่อโหลดหน้านี้ ---
+  useEffect(() => {
+    // ใช้ onAuthStateChanged เพื่อรอให้ระบบเช็ค User ให้เสร็จก่อนดึงข้อมูล
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const userDocRef = doc(db, 'users', user.uid);
+          const docSnap = await getDoc(userDocRef);
+          
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setProfile(prev => ({ ...prev, ...data }));
+            
+            if (data.emergencyContact && onUpdateContact) {
+              onUpdateContact(data.emergencyContact);
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching user data:", error);
+        } finally {
+          setLoading(false); 
         }
-      })
-      .catch((error) => {
-        console.error("เกิดข้อผิดพลาดในการออกจากระบบ:", error);
-        alert("ไม่สามารถออกจากระบบได้ กรุณาลองใหม่อีกครั้ง");
-      });
-  };
+      } else {
+        setLoading(false); 
+      }
+    });
 
-  // --- ฟังก์ชันคำนวณอายุจาก birthDate (DD/MM/YYYY พ.ศ.) ---
+    return () => unsubscribe();
+  }, []);
+
   const calculateAge = (bDate) => {
     try {
       const parts = bDate.split('/');
@@ -64,6 +85,19 @@ export default function ProfileScreen({ onGoHome, onGoSOS, onGoSearch, onGoProfi
       }
       return age > 0 ? age : 0;
     } catch (e) { return 0; }
+  };
+
+  const handleLogout = () => {
+    signOut(auth)
+      .then(() => {
+        if (onLogout) {
+          onLogout();
+        }
+      })
+      .catch((error) => {
+        console.error("เกิดข้อผิดพลาดในการออกจากระบบ:", error);
+        Alert.alert("ผิดพลาด", "ไม่สามารถออกจากระบบได้ กรุณาลองใหม่อีกครั้ง");
+      });
   };
 
   const emergencyOptions = [
@@ -99,56 +133,70 @@ export default function ProfileScreen({ onGoHome, onGoSOS, onGoSearch, onGoProfi
   };
 
   const onDateChange = (event, selectedDate) => {
-    if (Platform.OS === 'android') setShowDatePicker(false);
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+    if (event.type === 'dismissed') return;
+
     if (selectedDate) {
+      setDateValue(selectedDate);
       const day = String(selectedDate.getDate()).padStart(2, '0');
       const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
       const year = selectedDate.getFullYear() + 543;
-      setProfile({ ...profile, birthDate: `${day}/${month}/${year}` });
+      setProfile(prev => ({ ...prev, birthDate: `${day}/${month}/${year}` }));
     }
   };
 
-  const handleMapPress = (e) => {
-    setProfile({ ...profile, coordinate: e.nativeEvent.coordinate });
+  const handleMapPress = async (e) => {
+    const coord = e.nativeEvent.coordinate;
+    setProfile(prev => ({ ...prev, coordinate: coord }));
+    
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${coord.latitude}&lon=${coord.longitude}&format=json&accept-language=th`
+      );
+      const data = await res.json();
+      const address = data.display_name || `${coord.latitude.toFixed(5)}, ${coord.longitude.toFixed(5)}`;
+      setProfile(prev => ({ ...prev, coordinate: coord, address: address }));
+    } catch(err) {
+      setProfile(prev => ({ ...prev, coordinate: coord, address: `${coord.latitude.toFixed(5)}, ${coord.longitude.toFixed(5)}` }));
+    }
   };
 
-  const confirmSave = () => {
-    setShowConfirmModal(false);
-    setIsEditing(false);
+  // --- 2. บันทึกข้อมูลลง Firestore ---
+  const confirmSave = async () => {
+    setShowConfirmModal(false); 
+    
+    const user = auth.currentUser;
+
+    if (user) {
+      try {
+        const userDocRef = doc(db, 'users', user.uid);
+        await setDoc(userDocRef, profile, { merge: true });
+        
+        setIsEditing(false); 
+        Alert.alert("สำเร็จ", "บันทึกข้อมูลเรียบร้อยแล้ว");
+      } catch (error) {
+        console.error("Error saving profile:", error);
+        Alert.alert("ผิดพลาด", "เกิดข้อผิดพลาดในการบันทึกข้อมูล");
+      }
+    } else {
+      Alert.alert("แจ้งเตือน", "ไม่พบข้อมูลผู้ใช้ กรุณาเข้าสู่ระบบอีกครั้ง");
+    }
   };
 
-  const renderMapModal = () => (
-    <Modal visible={showMapModal} animationType="slide" transparent={true}>
-      <View style={styles.modalOverlaySlide}>
-        <View style={[styles.modalContent, { height: '80%' }]}>
-          <Text style={styles.modalTitle}>เลือกที่อยู่ของคุณ (แตะเพื่อปักหมุด)</Text>
-          <View style={styles.mapContainer}>
-            <MapView
-              style={styles.map}
-              initialRegion={{
-                latitude: profile.coordinate.latitude,
-                longitude: profile.coordinate.longitude,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-              }}
-              onPress={handleMapPress}
-            >
-              {profile.coordinate && <Marker coordinate={profile.coordinate} />}
-            </MapView>
-          </View>
-          <TouchableOpacity style={styles.btnOrange} onPress={() => setShowMapModal(false)}>
-            <Text style={styles.btnOrangeText}>ยืนยันที่อยู่</Text>
-          </TouchableOpacity>
-        </View>
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+        <ActivityIndicator size="large" color="#FF8A4C" />
+        <Text style={{ marginTop: 10, color: '#888' }}>กำลังโหลดข้อมูล...</Text>
       </View>
-    </Modal>
-  );
+    );
+  }
 
-  // --- ส่วนการแสดงผลหลัก ---
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
       {isEditing ? (
-        /* --- 1. โหมดแก้ไขโปรไฟล์ (Edit Mode) --- */
         <View style={{ flex: 1 }}>
           <ScrollView style={styles.container}>
             <View style={styles.editHeader}>
@@ -191,7 +239,14 @@ export default function ProfileScreen({ onGoHome, onGoSOS, onGoSearch, onGoProfi
                 </View>
               </View>
 
-              <TouchableOpacity style={styles.inputBox} onPress={() => setShowDatePicker(true)}>
+              <TouchableOpacity style={styles.inputBox} onPress={() => {
+                  try {
+                    const parts = profile.birthDate.split('/');
+                    const yearAD = parseInt(parts[2]) - 543;
+                    setDateValue(new Date(yearAD, parseInt(parts[1]) - 1, parseInt(parts[0])));
+                  } catch(e) { setDateValue(new Date()); }
+                  setShowDatePicker(true);
+                }}>
                 <Text style={styles.inputLabel}>เลือกวันเกิด</Text>
                 <View style={styles.datePickerRow}>
                   <Text style={styles.inputText}>{profile.birthDate}</Text>
@@ -246,7 +301,6 @@ export default function ProfileScreen({ onGoHome, onGoSOS, onGoSearch, onGoProfi
           </ScrollView>
         </View>
       ) : (
-        /* --- 2. โหมดดูโปรไฟล์ปกติ (View Mode) --- */
         <ScrollView style={styles.container}>
           <View style={styles.headerContainerView}>
             <Image source={{ uri: profile.profileImage }} style={styles.profilePic} />
@@ -262,12 +316,7 @@ export default function ProfileScreen({ onGoHome, onGoSOS, onGoSearch, onGoProfi
             </View>
           </View>
 
-          <LinearGradient
-            colors={['#F08C28', '#F5C242']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 0, y: 1 }}
-            style={styles.gradientCard}
-          >
+          <LinearGradient colors={['#F08C28', '#F5C242']} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.gradientCard}>
             <Text style={styles.cardHeaderTitle}>{profile.firstName}</Text>
             <Text style={styles.cardText}>อายุ {calculateAge(profile.birthDate)} ปี | กรุ๊ปเลือด {profile.bloodType}</Text>
             <Text style={styles.cardText}>น้ำหนัก {profile.weight} กก. | ส่วนสูง {profile.height} ซม.</Text>
@@ -295,11 +344,7 @@ export default function ProfileScreen({ onGoHome, onGoSOS, onGoSearch, onGoProfi
             <Ionicons name="chevron-forward" size={20} color="#ccc" />
           </TouchableOpacity>
 
-          {/* --- ปุ่มออกจากระบบ --- */}
-          <TouchableOpacity
-            style={[styles.actionCard, { borderColor: '#FF3B30', backgroundColor: '#FFF0F0' }]}
-            onPress={handleLogout}
-          >
+          <TouchableOpacity style={[styles.actionCard, { borderColor: '#FF3B30', backgroundColor: '#FFF0F0' }]} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={24} color="#FF3B30" />
             <View style={{ marginLeft: 15, flex: 1 }}>
               <Text style={[styles.actionTitle, { color: '#FF3B30' }]}>ออกจากระบบ</Text>
@@ -307,30 +352,67 @@ export default function ProfileScreen({ onGoHome, onGoSOS, onGoSearch, onGoProfi
             </View>
           </TouchableOpacity>
 
-          <View style={{ height: 100 }} />
+          <View style={{ height: 100 }} /> 
         </ScrollView>
       )}
 
-      {/* --- Modals ต่างๆ --- */}
-      {renderMapModal()}
-
-      {/* DatePicker Modal */}
-      <Modal visible={showDatePicker && Platform.OS === 'ios'} animationType="fade" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.pickerContent, { padding: 20, alignItems: 'center' }]}>
-            <DateTimePicker
-              value={new Date()}
-              mode="date"
-              display="inline"
-              onChange={onDateChange}
-              style={{ width: 320, height: 320 }}
-            />
-            <TouchableOpacity style={[styles.btnOrange, { marginTop: 15 }]} onPress={() => setShowDatePicker(false)}>
-              <Text style={styles.btnOrangeText}>ตกลง</Text>
+      <Modal visible={showMapModal} animationType="slide" transparent={true}>
+        <View style={styles.modalOverlaySlide}>
+          <View style={[styles.modalContent, { height: '80%' }]}>
+            <Text style={styles.modalTitle}>เลือกที่อยู่ของคุณ (แตะเพื่อปักหมุด)</Text>
+            <View style={styles.mapContainer}>
+              <MapView
+                style={styles.map}
+                initialRegion={{
+                  latitude: profile.coordinate.latitude,
+                  longitude: profile.coordinate.longitude,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                }}
+                onPress={handleMapPress}
+              >
+                {profile.coordinate && <Marker coordinate={profile.coordinate} />}
+              </MapView>
+            </View>
+            <TouchableOpacity style={styles.btnOrange} onPress={() => setShowMapModal(false)}>
+              <Text style={styles.btnOrangeText}>ยืนยันที่อยู่</Text>
             </TouchableOpacity>
+            {profile.address ? (
+              <Text style={{ marginTop: 10, fontSize: 12, color: '#555', textAlign: 'center', paddingHorizontal: 10 }}>
+                📍 {profile.address}
+              </Text>
+            ) : null}
           </View>
         </View>
       </Modal>
+
+      {Platform.OS === 'ios' ? (
+        <Modal visible={showDatePicker} animationType="fade" transparent={true}>
+          <View style={styles.modalOverlay}>
+            <View style={[styles.pickerContent, { padding: 20, alignItems: 'center' }]}>
+              <DateTimePicker
+                value={dateValue}
+                mode="date"
+                display="inline"
+                onChange={onDateChange}
+                style={{ width: 320, height: 320 }}
+              />
+              <TouchableOpacity style={[styles.btnOrange, { marginTop: 15 }]} onPress={() => setShowDatePicker(false)}>
+                <Text style={styles.btnOrangeText}>ตกลง</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      ) : (
+        showDatePicker && (
+          <DateTimePicker
+            value={dateValue}
+            mode="date"
+            display="default"
+            onChange={onDateChange}
+          />
+        )
+      )}
 
       <Modal visible={showPickerModal} animationType="fade" transparent={true}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowPickerModal(false)}>
@@ -380,6 +462,12 @@ export default function ProfileScreen({ onGoHome, onGoSOS, onGoSearch, onGoProfi
                 style={styles.emergencyItemCard}
                 onPress={() => {
                   setProfile({ ...profile, emergencyContact: item });
+                  if (auth.currentUser) {
+                    setDoc(doc(db, 'users', auth.currentUser.uid), { emergencyContact: item }, { merge: true });
+                  }
+                  if (onUpdateContact) {
+                     onUpdateContact(item);
+                  }
                   setShowEmergencyModal(false);
                 }}
               >
@@ -395,7 +483,6 @@ export default function ProfileScreen({ onGoHome, onGoSOS, onGoSearch, onGoProfi
         </SafeAreaView>
       </Modal>
 
-      {/* --- 3. Footer --- */}
       <View style={styles.footer}>
         <TouchableOpacity style={styles.footerButton} onPress={onGoHome}>
           <Image source={require('./assets/home (2).png')} style={[styles.footerIcon, { tintColor: '#929292' }]} />
@@ -414,7 +501,6 @@ export default function ProfileScreen({ onGoHome, onGoSOS, onGoSearch, onGoProfi
   );
 }
 
-// --- Styles ---
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, paddingTop: 50 },
   headerContainerView: { flexDirection: 'row', alignItems: 'center', marginBottom: 25 },
