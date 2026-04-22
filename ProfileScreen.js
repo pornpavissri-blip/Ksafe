@@ -14,6 +14,7 @@ export default function ProfileScreen({ onGoHome, onGoSOS, onGoSearch, onGoProfi
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showMapModal, setShowMapModal] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const [pickerData, setPickerData] = useState([]);
   const [currentPickerField, setCurrentPickerField] = useState('');
@@ -298,7 +299,7 @@ export default function ProfileScreen({ onGoHome, onGoSOS, onGoSearch, onGoProfi
           {/* --- ปุ่มออกจากระบบ --- */}
           <TouchableOpacity
             style={[styles.actionCard, { borderColor: '#FF3B30', backgroundColor: '#FFF0F0' }]}
-            onPress={handleLogout}
+            onPress={() => setShowLogoutModal(true)}
           >
             <Ionicons name="log-out-outline" size={24} color="#FF3B30" />
             <View style={{ marginLeft: 15, flex: 1 }}>
@@ -393,6 +394,32 @@ export default function ProfileScreen({ onGoHome, onGoSOS, onGoSearch, onGoProfi
             )}
           />
         </SafeAreaView>
+      </Modal>
+
+      {/* --- Modal ยืนยันออกจากระบบ --- */}
+      <Modal visible={showLogoutModal} animationType="slide" transparent={true}>
+        <View style={styles.modalOverlaySlide}>
+          <View style={styles.confirmModalContent}>
+            <View style={styles.modalHandle} />
+            <Ionicons name="log-out-outline" size={40} color="#FF3B30" style={{ marginBottom: 12 }} />
+            <Text style={styles.confirmTitle}>ออกจากระบบ</Text>
+            <Text style={{ color: '#888', fontSize: 14, marginBottom: 25, textAlign: 'center' }}>
+              คุณแน่ใจหรือไม่ที่จะออกจากระบบ?
+            </Text>
+            <TouchableOpacity
+              style={[styles.btnOrange, { backgroundColor: '#FF3B30' }]}
+              onPress={() => {
+                setShowLogoutModal(false);
+                handleLogout();
+              }}
+            >
+              <Text style={styles.btnOrangeText}>ยืนยัน ออกจากระบบ</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.btnGray} onPress={() => setShowLogoutModal(false)}>
+              <Text style={styles.btnGrayText}>ยกเลิก</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       {/* --- 3. Footer --- */}
