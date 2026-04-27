@@ -165,6 +165,7 @@ export default function App() {
   if (currentScreen === 'Profile') {
     return (
       <ProfileScreen 
+        currentUserPhone={userPhone}
         onGoHome={userRole === 'admin' ? navigateTo.admin : navigateTo.home}
         onGoSOS={userRole === 'admin' ? navigateTo.manageContact : navigateTo.sos}
         onGoSearch={userRole === 'admin' ? navigateTo.manageFacilities : navigateTo.search}
