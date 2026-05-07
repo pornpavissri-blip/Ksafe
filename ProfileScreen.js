@@ -26,6 +26,9 @@ export default function ProfileScreen({ currentUserPhone, onGoHome, onGoSOS, onG
   const [currentPickerField, setCurrentPickerField] = useState('');
   const [dateValue, setDateValue] = useState(new Date());
 
+  // ✅ เพิ่ม state สำหรับเก็บรายการจาก Firestore
+  const [emergencyOptions, setEmergencyOptions] = useState([]);
+
   const [profile, setProfile] = useState({
     firstName: '',
     lastName: '',
@@ -88,6 +91,26 @@ export default function ProfileScreen({ currentUserPhone, onGoHome, onGoSOS, onG
     fetchUserData();
   }, [currentUserPhone]);
 
+  // ✅ ดึงรายการจาก Firestore collection emergency_services
+  useEffect(() => {
+    const fetchEmergencyServices = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, 'emergency_services'));
+        const data = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          name: docSnap.data().title,
+          phone: docSnap.data().phone,
+          desc: docSnap.data().category,
+          image: require('./assets/telephone.png'),
+        }));
+        setEmergencyOptions(data);
+      } catch (e) {
+        console.error('fetch emergency_services error:', e);
+      }
+    };
+    fetchEmergencyServices();
+  }, []);
+
   const calculateAge = (bDate) => {
     try {
       const parts = bDate.split('/');
@@ -115,15 +138,6 @@ export default function ProfileScreen({ currentUserPhone, onGoHome, onGoSOS, onG
       onLogout(); // App.js จะเคลียร์ userPhone, userRole และพากลับไปหน้า Login
     }
   };
-
-  const emergencyOptions = [
-    { id: '1', name: 'สถานีตำรวจ', desc: 'แจ้งเหตุด่วนเหตุร้ายกับตำรวจ', phone: '191', image: require('./assets/telephone.png') },
-    { id: '2', name: 'โรงพยาบาล', desc: 'บริการทางด้านสุขภาพ', phone: '1669', image: require('./assets/telephone.png') },
-    { id: '3', name: 'กู้ภัย กู้ชีพ', desc: 'อุบัติเหตุฉุกเฉิน เหตุเร่งด่วน', phone: '1669', image: require('./assets/telephone.png') },
-    { id: '4', name: 'เพลิงไหม้', desc: 'แจ้งเหตุเพลิงไหม้', phone: '199', image: require('./assets/telephone.png') },
-    { id: '5', name: 'การไฟฟ้าส่วนภูมิภาค', desc: 'จัดหาและจำหน่ายพลังงานไฟฟ้า', phone: '1129', image: require('./assets/telephone.png') },
-    { id: '6', name: 'กรมการขนส่งทางบก', desc: 'ดูแล จัดระเบียบ พัฒนาระบบการขนส่งทางถนน', phone: '1584', image: require('./assets/telephone.png') },
-  ];
 
   const pickImage = async () => {
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -465,6 +479,7 @@ export default function ProfileScreen({ currentUserPhone, onGoHome, onGoSOS, onG
         </View>
       </Modal>
 
+      {/* ✅ Modal เลือกเบอร์ติดต่อฉุกเฉิน ดึงจาก Firestore */}
       <Modal visible={showEmergencyModal} animationType="slide" transparent={false}>
         <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
           <View style={styles.fullScreenHeader}>
@@ -481,13 +496,15 @@ export default function ProfileScreen({ currentUserPhone, onGoHome, onGoSOS, onG
               <TouchableOpacity
                 style={styles.emergencyItemCard}
                 onPress={() => {
-                  setProfile({ ...profile, emergencyContact: item });
+                  // ✅ สร้าง contact object ที่มีแค่ name กับ phone ส่งให้ SOS
+                  const selectedContact = { name: item.name, phone: item.phone };
+                  setProfile({ ...profile, emergencyContact: selectedContact });
                   if (userDocId) {
-                    updateDoc(doc(db, 'users', userDocId), { emergencyContact: item })
+                    updateDoc(doc(db, 'users', userDocId), { emergencyContact: selectedContact })
                       .catch(err => console.error("Error updating emergency contact:", err));
                   }
                   if (onUpdateContact) {
-                    onUpdateContact(item);
+                    onUpdateContact(selectedContact);
                   }
                   setShowEmergencyModal(false);
                 }}
@@ -496,10 +513,17 @@ export default function ProfileScreen({ currentUserPhone, onGoHome, onGoSOS, onG
                 <View style={styles.emergencyTextContainer}>
                   <Text style={styles.emergencyName}>{item.name}</Text>
                   <Text style={styles.emergencyDesc}>{item.desc}</Text>
+                  
                 </View>
                 <Text style={styles.selectButtonText}>เลือก</Text>
               </TouchableOpacity>
             )}
+            ListEmptyComponent={
+              <View style={{ alignItems: 'center', marginTop: 50 }}>
+                <ActivityIndicator size="large" color="#FF8A4C" />
+                <Text style={{ color: '#888', marginTop: 10 }}>กำลังโหลดรายการ...</Text>
+              </View>
+            }
           />
         </SafeAreaView>
       </Modal>
@@ -600,6 +624,7 @@ const styles = StyleSheet.create({
   emergencyTextContainer: { flex: 1, marginLeft: 15 },
   emergencyName: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 2 },
   emergencyDesc: { fontSize: 12, color: '#888' },
+  emergencyPhone: { fontSize: 13, color: '#FF8A4C', fontWeight: 'bold', marginTop: 2 },
   selectButtonText: { color: '#007AFF', fontSize: 14, fontWeight: 'bold', marginLeft: 10 },
   footer: {
     position: 'absolute',
@@ -635,7 +660,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
     marginTop: 5,
-    // เงาให้วงกลมดูลอยขึ้นมา
     shadowColor: '#FF3B30',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
@@ -664,7 +688,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
-    // เงาปุ่มสีแดง
     shadowColor: '#FF3B30',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
