@@ -11,11 +11,13 @@ import { ChevronDown } from 'lucide-react-native'; // อย่าลืมล�
 
 // ── รายการบริการ (Hardcode จาก assets) ──
 const SERVICE_LIST = [
-  { key: 'jrajon', label: 'สายด่วนจราจร', image: require('./assets/jrajon.png'), accent: '#3B82F6' },
-  { key: 'police', label: 'สถานีตำรวจ', image: require('./assets/police.png'), accent: '#6366F1' },
-  { key: 'fire', label: 'เพลิงไหม้', image: require('./assets/fire.png'), accent: '#EF4444' },
-  { key: 'electric', label: 'การไฟฟ้าส่วนภูมิภาค', image: require('./assets/phifa.png'), accent: '#F59E0B' },
-  { key: 'rescue', label: 'แพทย์ฉุกเฉิน', image: require('./assets/rp.png'), accent: '#10B981' },
+  { key: 'a', label: 'โรงพยาบาล', image: require('./assets/rp.png'), accent: '#fa9f17' },
+  { key: 'b', label: 'สถานีตำรวจ', image: require('./assets/police.png'), accent: '#fa9f17' },
+  { key: 'c', label: 'กู้ภัย', image: require('./assets/rs.png'), accent: '#fa9f17' },
+  { key: 'd', label: 'เพลิงไหม้', image: require('./assets/fire.png'), accent: '#fa9f17' },
+  { key: 'e', label: 'ความปลอดภัย', image: require('./assets/safety.png'), accent: '#fa9f17' }, 
+  { key: 'f', label: 'สาธารณูปโภค', image: require('./assets/Transport.png'), accent: '#fa9f17' }, 
+    
 ];
 
 const MONTHS = [
@@ -104,6 +106,9 @@ const AdminHomeScreen = ({ onLogout, onGoHome, onGoSOS, onGoSearch, onGoProfile,
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [showDropdown, setShowDropdown] = useState(false);
 
+  // ✅ State เก็บ mapping title → category จาก emergency_services
+  const [serviceCategoryMap, setServiceCategoryMap] = useState({});
+
   // ── ✅ Realtime listener: incidents + นับเฉพาะวันนี้ ──
   useEffect(() => {
     const q = query(collection(db, 'incident_reports'));
@@ -166,19 +171,37 @@ const AdminHomeScreen = ({ onLogout, onGoHome, onGoSOS, onGoSearch, onGoProfile,
     fetchCounts();
   }, []);
 
+  // ── ✅ Realtime listener: emergency_services → map title → category ──
+  useEffect(() => {
+    const unsubscribe = onSnapshot(collection(db, 'emergency_services'), (snapshot) => {
+      const map = {};
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.title && data.category) {
+          map[data.title] = data.category;
+        }
+      });
+      setServiceCategoryMap(map);
+    }, (error) => {
+      console.error('Firebase emergency_services error:', error);
+    });
+    return () => unsubscribe();
+  }, []);
+
   // ── ✅ Logic กรองข้อมูลรายเดือน (สำหรับส่วน Service Summary) ──
-  const monthlyFilteredCounts = useMemo(() => {
+const monthlyFilteredCounts = useMemo(() => {
     const counts = {};
     incidents.forEach(item => {
       if (item.parsedDate && item.parsedDate.getMonth() === selectedMonth) {
-        const name = item.service_name;
-        if (name) {
-          counts[name] = (counts[name] || 0) + 1;
+        // ดึง category จาก emergency_services โดย match service_name กับ title
+        const category = serviceCategoryMap[item.service_name] || item.service_name;
+        if (category) {
+          counts[category] = (counts[category] || 0) + 1;
         }
       }
     });
     return counts;
-  }, [incidents, selectedMonth]);
+  }, [incidents, selectedMonth, serviceCategoryMap]);
 
   const currentMaxCount = useMemo(() => {
     const values = Object.values(monthlyFilteredCounts);
