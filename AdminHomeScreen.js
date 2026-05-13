@@ -11,11 +11,7 @@ import { ChevronDown } from 'lucide-react-native'; // อย่าลืมล�
 
 // ── รายการบริการ (Hardcode จาก assets) ──
 const SERVICE_LIST = [
-  { key: 'jrajon', label: 'สายด่วนจราจร', image: require('./assets/jrajon.png'), accent: '#3B82F6' },
-  { key: 'police', label: 'สถานีตำรวจ', image: require('./assets/police.png'), accent: '#6366F1' },
-  { key: 'fire', label: 'เพลิงไหม้', image: require('./assets/fire.png'), accent: '#EF4444' },
-  { key: 'electric', label: 'การไฟฟ้าส่วนภูมิภาค', image: require('./assets/phifa.png'), accent: '#F59E0B' },
-  { key: 'rescue', label: 'แพทย์ฉุกเฉิน', image: require('./assets/rp.png'), accent: '#10B981' },
+  { key: 'jrajon', label: 'ชมรมจิตอาสาแสดทอง', image: require('./assets/jrajon.png'), accent: '#fa9f17' }, 
 ];
 
 const MONTHS = [
@@ -167,11 +163,12 @@ const AdminHomeScreen = ({ onLogout, onGoHome, onGoSOS, onGoSearch, onGoProfile,
   }, []);
 
   // ── ✅ Logic กรองข้อมูลรายเดือน (สำหรับส่วน Service Summary) ──
-  const monthlyFilteredCounts = useMemo(() => {
+const monthlyFilteredCounts = useMemo(() => {
     const counts = {};
     incidents.forEach(item => {
       if (item.parsedDate && item.parsedDate.getMonth() === selectedMonth) {
-        const name = item.service_name;
+        // ดึงจาก category แทน ถ้าไม่มีให้ fallback ไปหา service_name ป้องกันบัค
+        const name = item.category || item.service_name; 
         if (name) {
           counts[name] = (counts[name] || 0) + 1;
         }
@@ -232,17 +229,23 @@ const AdminHomeScreen = ({ onLogout, onGoHome, onGoSOS, onGoSearch, onGoProfile,
           </View>
 
           <View style={styles.cardColRight}>
-            <View style={[styles.cardSmall, { backgroundColor: '#1E1B4B' }]}>
+            <View style={[styles.cardSmall, { backgroundColor: '#3f398a' }]}>
               <View style={[styles.deco, { width: 60, height: 60, top: -15, right: -15, backgroundColor: 'rgba(255,255,255,0.08)' }]} />
               <Text style={styles.cardIcon}>👤</Text>
               <Text style={styles.cardNum}>{statsLoading ? '–' : stats.totalUsers}</Text>
               <Text style={styles.cardLabel}>ผู้ใช้ทั้งหมด</Text>
             </View>
-            <View style={[styles.cardSmall, { backgroundColor: '#065F46' }]}>
+            <View style={[styles.cardSmall, { backgroundColor: '#c21b16' }]}>
               <View style={[styles.deco, { width: 60, height: 60, top: -15, right: -15, backgroundColor: 'rgba(255,255,255,0.08)' }]} />
-              <Text style={styles.cardIcon}>🏥</Text>
-              <Text style={styles.cardNum}>{statsLoading ? '–' : stats.totalFacilities}</Text>
-              <Text style={styles.cardLabel}>สถานที่ในระบบ</Text>
+              <Text style={styles.cardIcon}>📅</Text>
+              {incidentLoading ? (
+                <ActivityIndicator color="#FFF" style={{ marginVertical: 6 }} />
+              ) : (
+                <Text style={styles.cardNum}>
+                  {incidents.filter(item => item.parsedDate && item.parsedDate.getMonth() === selectedMonth).length}
+                </Text>
+              )}
+              <Text style={styles.cardLabel}>เหตุเดือน{MONTHS[selectedMonth].label}</Text>
             </View>
           </View>
         </View>
@@ -404,7 +407,7 @@ const AdminHomeScreen = ({ onLogout, onGoHome, onGoSOS, onGoSearch, onGoProfile,
         </TouchableOpacity>
       </Modal>
 
-      {/* ── Footer ── */}
+       {/* ── Footer ── */}
       <View style={styles.footer}>
         <TouchableOpacity style={styles.footerButton} onPress={onGoHome}><Image source={require('./assets/home (2).png')} style={[styles.footerIcon, { tintColor: '#F87C47' }]} /></TouchableOpacity>
         <TouchableOpacity style={styles.footerButton} onPress={onGoSOS}><Image source={require('./assets/phone-call.png')} style={[styles.footerIcon, { tintColor: '#D9D9D9' }]} /></TouchableOpacity>
